@@ -1,122 +1,105 @@
-import { PrismaClient, Role } from '@prisma/client';
-
+import { PrismaClient, Role, LoanStatus } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting database seeding...');
+  // Clean existing data to avoid unique constraint collisions on re-seed
+  await prisma.loan.deleteMany();
+  await prisma.book.deleteMany();
+  await prisma.genre.deleteMany();
+  await prisma.user.deleteMany();
 
-  // 1. Create Genres (4+ required)
-  const fiction = await prisma.genre.upsert({
-    where: { name: 'Literary Fiction' },
-    update: {},
-    create: { name: 'Literary Fiction', description: 'Prose fiction focused on depth of character and theme.' },
-  });
+  // Create Genres
+  const genreData = [
+    { name: "Fantasy", slug: "fantasy" },
+    { name: "Science Fiction", slug: "science-fiction" },
+    { name: "Mystery", slug: "mystery" },
+    { name: "Biography", slug: "biography" },
+  ];
 
-  const sciFi = await prisma.genre.upsert({
-    where: { name: 'Science Fiction' },
-    update: {},
-    create: { name: 'Science Fiction', description: 'Futuristic concepts, space exploration, and advanced tech.' },
-  });
+  const genres = await Promise.all(
+    genreData.map((g) => prisma.genre.create({ data: g })),
+  );
 
-  const fantasy = await prisma.genre.upsert({
-    where: { name: 'Fantasy' },
-    update: {},
-    create: { name: 'Fantasy', description: 'Magical and supernatural elements set in fictional universes.' },
-  });
-
-  const tech = await prisma.genre.upsert({
-    where: { name: 'Computer Science' },
-    update: {},
-    create: { name: 'Computer Science', description: 'Software engineering, system design, and programming.' },
-  });
-
-  const history = await prisma.genre.upsert({
-    where: { name: 'History' },
-    update: {},
-    create: { name: 'History', description: 'Non-fiction recounting past human events and eras.' },
-  });
-
-  // 2. Create Users (Patron & Librarian)
-  const librarian = await prisma.user.upsert({
-    where: { email: 'head.librarian@library.org' },
-    update: {},
-    create: {
-      email: 'head.librarian@library.org',
-      name: 'Amina Mwangi',
+  // Create Sample Users
+  const librarian = await prisma.user.create({
+    data: {
+      email: "librarian@library.com",
+      password: "securepassword123",
       role: Role.LIBRARIAN,
     },
   });
 
-  const patron = await prisma.user.upsert({
-    where: { email: 'stacey.patron@student.edu' },
-    update: {},
-    create: {
-      email: 'stacey.patron@student.edu',
-      name: 'Stacey Wanjiku',
+  const patron = await prisma.user.create({
+    data: {
+      email: "patron@student.com",
+      password: "securepassword123",
       role: Role.PATRON,
     },
   });
 
-  // 3. Insert 15+ Books distributed across genres
-  const booksData = [
-    // Literary Fiction
-    { title: 'The River and the Source', author: 'Margaret Ogola', isbn: '978-9966846171', publishedYear: 1994, copiesAvailable: 4, genreId: fiction.id },
-    { title: 'Things Fall Apart', author: 'Chinua Achebe', isbn: '978-0385474542', publishedYear: 1958, copiesAvailable: 6, genreId: fiction.id },
-    { title: 'Americanah', author: 'Chimamanda Ngozi Adichie', isbn: '978-0307455925', publishedYear: 2013, copiesAvailable: 3, genreId: fiction.id },
-    { title: 'Petals of Blood', author: 'Ngũgĩ wa Thiong\'o', isbn: '978-0141187020', publishedYear: 1977, copiesAvailable: 2, genreId: fiction.id },
-
-    // Science Fiction
-    { title: 'Dune', author: 'Frank Herbert', isbn: '978-0441172719', publishedYear: 1965, copiesAvailable: 5, genreId: sciFi.id },
-    { title: 'Neuromancer', author: 'William Gibson', isbn: '978-0441569595', publishedYear: 1984, copiesAvailable: 3, genreId: sciFi.id },
-    { title: 'The Three-Body Problem', author: 'Liu Cixin', isbn: '978-0765382030', publishedYear: 2008, copiesAvailable: 4, genreId: sciFi.id },
-    { title: 'Snow Crash', author: 'Neal Stephenson', isbn: '978-0553380958', publishedYear: 1992, copiesAvailable: 2, genreId: sciFi.id },
-
+  // 16 Complete Books (4 per genre)
+  const sampleBooks = [
     // Fantasy
-    { title: 'The Way of Kings', author: 'Brandon Sanderson', isbn: '978-0765326357', publishedYear: 2010, copiesAvailable: 3, genreId: fantasy.id },
-    { title: 'The Hobbit', author: 'J.R.R. Tolkien', isbn: '978-0547928227', publishedYear: 1937, copiesAvailable: 7, genreId: fantasy.id },
-    { title: 'Name of the Wind', author: 'Patrick Rothfuss', isbn: '978-0756404749', publishedYear: 2007, copiesAvailable: 4, genreId: fantasy.id },
+    { title: "The Hobbit", author: "J.R.R. Tolkien", genre: "Fantasy" },
+    { title: "The Fellowship of the Ring", author: "J.R.R. Tolkien", genre: "Fantasy" },
+    { title: "A Game of Thrones", author: "George R.R. Martin", genre: "Fantasy" },
+    { title: "The Name of the Wind", author: "Patrick Rothfuss", genre: "Fantasy" },
+    
+    // Science Fiction
+    { title: "Dune", author: "Frank Herbert", genre: "Science Fiction" },
+    { title: "Neuromancer", author: "William Gibson", genre: "Science Fiction" },
+    { title: "Foundation", author: "Isaac Asimov", genre: "Science Fiction" },
+    { title: "Hyperion", author: "Dan Simmons", genre: "Science Fiction" },
 
-    // Computer Science
-    { title: 'Designing Data-Intensive Applications', author: 'Martin Kleppmann', isbn: '978-1449373328', publishedYear: 2017, copiesAvailable: 5, genreId: tech.id },
-    { title: 'Clean Code', author: 'Robert C. Martin', isbn: '978-0132350884', publishedYear: 2008, copiesAvailable: 6, genreId: tech.id },
-    { title: 'Pragmatic Programmer', author: 'Andrew Hunt & David Thomas', isbn: '978-0201616224', publishedYear: 1999, copiesAvailable: 4, genreId: tech.id },
+    // Mystery
+    { title: "The Big Sleep", author: "Raymond Chandler", genre: "Mystery" },
+    { title: "The Hound of the Baskervilles", author: "Arthur Conan Doyle", genre: "Mystery" },
+    { title: "Gone Girl", author: "Gillian Flynn", genre: "Mystery" },
+    { title: "The Girl with the Dragon Tattoo", author: "Stieg Larsson", genre: "Mystery" },
 
-    // History
-    { title: 'Sapiens: A Brief History of Humankind', author: 'Yuval Noah Harari', isbn: '978-0062316096', publishedYear: 2014, copiesAvailable: 5, genreId: history.id },
-    { title: 'Guns, Germs, and Steel', author: 'Jared Diamond', isbn: '978-0393317558', publishedYear: 1997, copiesAvailable: 3, genreId: history.id },
+    // Biography
+    { title: "Educated", author: "Tara Westover", genre: "Biography" },
+    { title: "The Diary of a Young Girl", author: "Anne Frank", genre: "Biography" },
+    { title: "Steve Jobs", author: "Walter Isaacson", genre: "Biography" },
+    { title: "Becoming", author: "Michelle Obama", genre: "Biography" },
   ];
 
-  for (const b of booksData) {
-    await prisma.book.upsert({
-      where: { isbn: b.isbn },
-      update: {},
-      create: b,
+  const createdBooks = [];
+  for (const book of sampleBooks) {
+    const genre = genres.find((g) => g.name === book.genre);
+    const newBook = await prisma.book.create({
+      data: {
+        title: book.title,
+        author: book.author,
+        isbn: `978${Math.floor(1000000000 + Math.random() * 9000000000)}`,
+        description: `Acclaimed work titled ${book.title} authored by ${book.author}.`,
+        totalCopies: 3,
+        availableCopies: 2,
+        genreId: genre.id,
+      },
     });
+    createdBooks.push(newBook);
   }
 
-  // 4. Create sample review (Stretch Goal)
-  const sampleBook = await prisma.book.findFirst({ where: { title: 'Designing Data-Intensive Applications' } });
-  if (sampleBook) {
-    await prisma.createReviewOrSkip?: any;
-    await prisma.review.createMany({
-      skipDuplicates: true,
-      data: [
-        {
-          rating: 5,
-          comment: 'An absolute masterpiece for understanding distributed systems and databases!',
-          bookId: sampleBook.id,
-          userId: patron.id,
-        },
-      ],
-    });
-  }
+  // Seed initial active loan record
+  const dueDateTime = new Date();
+  dueDateTime.setDate(dueDateTime.getDate() + 14);
 
-  console.log('✅ Seeding completed successfully! 17 books and 5 genres loaded.');
+  await prisma.loan.create({
+    data: {
+      userId: patron.id,
+      bookId: createdBooks[0].id,
+      dueDate: dueDateTime,
+      status: LoanStatus.ACTIVE,
+    },
+  });
+
+  console.log("Database seeded successfully with genres, users, 16 books, and loan records!");
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error during seeding:', e);
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {
